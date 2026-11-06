@@ -360,6 +360,52 @@ class ValidationResult:
         }
 
 
+@dataclass
+class RateDiscoveryResult:
+    endpoint: str
+    server_info: dict[str, Any]
+    corpus_summary: dict[str, Any]
+    constraints: Constraints
+    batch_size: int
+    concurrency: int
+    min_rate: float
+    max_rate: float
+    step: float
+    failure_window: int
+    validations: list[ValidationResult]
+    recommended: ValidationResult | None
+    stopped_early: bool
+    non_monotonic: bool
+    generated_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "tool_version": __version__,
+            "generated_at": self.generated_at,
+            "endpoint": self.endpoint,
+            "server_info": self.server_info,
+            "corpus_summary": self.corpus_summary,
+            "constraints": asdict(self.constraints),
+            "batch_size": self.batch_size,
+            "concurrency": self.concurrency,
+            "min_rate": self.min_rate,
+            "max_rate": self.max_rate,
+            "step": self.step,
+            "failure_window": self.failure_window,
+            "recommended_rate": (
+                self.recommended.target_texts_per_second
+                if self.recommended is not None
+                else None
+            ),
+            "stopped_early": self.stopped_early,
+            "non_monotonic": self.non_monotonic,
+            "validations": [item.to_dict() for item in self.validations],
+        }
+
+
 def _t_critical_95(degrees_of_freedom: int) -> float:
     values = {
         1: 12.706,

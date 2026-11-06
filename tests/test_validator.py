@@ -4,9 +4,19 @@ import json
 import httpx
 
 from tei_autotune.client import TeiClient
-from tei_autotune.models import CellResult, Constraints, RunResult, WorkloadItem
-from tei_autotune.report import _diagnose_cell, write_validation_outputs
-from tei_autotune.validator import validate_fixed_rate
+from tei_autotune.models import (
+    CellResult,
+    Constraints,
+    RunResult,
+    ValidationResult,
+    WorkloadItem,
+)
+from tei_autotune.report import (
+    _diagnose_cell,
+    render_rate_discovery_markdown,
+    write_validation_outputs,
+)
+from tei_autotune.validator import discover_safe_rate, validate_fixed_rate
 
 
 def test_fixed_rate_validation_includes_client_queueing(tmp_path):
@@ -88,3 +98,64 @@ def test_scheduling_lag_does_not_claim_more_concurrency_will_help():
 
     assert "offered load exceeds" in diagnostic.lower()
     assert "higher concurrency will increase capacity" in diagnostic.lower()
+
+
+def test_rate_discovery_tolerates_one_failure_and_stops_after_two(monkeypatch):
+    outcomes = {25.0: True, 26.0: False, 27.0: True, 28.0: False, 29.0: False}
+
+    async def fake_validate(client, corpus, **kwargs):
+        rate = kwargs["arrival_rate_texts_per_second"]
+        run = RunResult(
+            batch_size=1,
+            concurrency=2,
+            repetition=0,
+            duration_seconds=1,
+            successful_requests=100,
+            failed_requests=0,
+            successful_texts=int(rate),
+            compute_tokens=0,
+            latencies_ms=[50] * 100,
+        )
+        return ValidationResult(
+            endpoint="http://mock",
+            server_info={},
+            corpus_summary={"items": 1},
+            constraints=kwargs["constraints"],
+            target_texts_per_second=rate,
+            cell=CellResult(1, 2, [run]),
+            passed=outcomes[rate],
+        )
+
+    monkeypatch.setattr("tei_autotune.validator.validate_fixed_rate", fake_validate)
+
+    result = asyncio.run(
+        discover_safe_rate(
+            object(),
+            [WorkloadItem("text")],
+            batch_size=1,
+            concurrency=2,
+            min_rate=25,
+            max_rate=35,
+            step=1,
+            failure_window=2,
+            duration_seconds=1,
+            warmup_seconds=0,
+            repetitions=1,
+            constraints=Constraints(200, 0.01),
+        )
+    )
+
+    assert [item.target_texts_per_second for item in result.validations] == [
+        25,
+        26,
+        27,
+        28,
+        29,
+    ]
+    assert result.recommended is not None
+    assert result.recommended.target_texts_per_second == 27
+    assert result.non_monotonic
+    assert result.stopped_early
+    report = render_rate_discovery_markdown(result)
+    assert "27 texts/s" in report
+    assert "boundary as noisy" in report

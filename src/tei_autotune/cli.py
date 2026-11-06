@@ -13,8 +13,14 @@ from .client import TeiClient
 from .corpus import load_corpus
 from .models import Constraints
 from .optimizer import optimize
-from .report import write_checkpoint, write_outputs, write_validation_outputs
-from .validator import validate_fixed_rate
+from .report import (
+    write_checkpoint,
+    write_outputs,
+    write_rate_discovery_checkpoint,
+    write_rate_discovery_outputs,
+    write_validation_outputs,
+)
+from .validator import discover_safe_rate, validate_fixed_rate
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -102,6 +108,37 @@ def build_parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--api-key-env", default="TEI_API_KEY")
     validate_parser.add_argument(
         "--output", type=Path, default=Path("validation-results")
+    )
+
+    discover_parser = subparsers.add_parser(
+        "discover-rate",
+        help="find the highest fixed arrival rate that satisfies constraints",
+    )
+    discover_parser.add_argument("--url", required=True, help="TEI base URL")
+    discover_parser.add_argument("--corpus", required=True, type=Path)
+    discover_parser.add_argument("--text-field", default="text")
+    discover_parser.add_argument("--batch-size", type=_positive_int, required=True)
+    discover_parser.add_argument("--concurrency", type=_positive_int, required=True)
+    discover_parser.add_argument("--min-rate", type=_positive_float, required=True)
+    discover_parser.add_argument("--max-rate", type=_positive_float, required=True)
+    discover_parser.add_argument("--step", type=_positive_float, default=1.0)
+    discover_parser.add_argument(
+        "--failure-window",
+        type=_positive_int,
+        default=2,
+        help="stop after this many consecutive failing rates",
+    )
+    discover_parser.add_argument("--max-p95-ms", type=_positive_float, default=200.0)
+    discover_parser.add_argument("--max-error-rate", type=_rate, default=0.01)
+    discover_parser.add_argument("--min-requests", type=_positive_int, default=100)
+    discover_parser.add_argument("--max-throughput-cv", type=_rate, default=0.10)
+    discover_parser.add_argument("--duration", type=_positive_float, default=60.0)
+    discover_parser.add_argument("--warmup", type=_nonnegative_float, default=2.0)
+    discover_parser.add_argument("--repetitions", type=_positive_int, default=3)
+    discover_parser.add_argument("--timeout", type=_positive_float, default=120.0)
+    discover_parser.add_argument("--api-key-env", default="TEI_API_KEY")
+    discover_parser.add_argument(
+        "--output", type=Path, default=Path("rate-discovery-results")
     )
     return parser
 
@@ -212,6 +249,60 @@ async def run_validate(args: argparse.Namespace) -> int:
     return 0 if result.passed else 1
 
 
+async def run_discover_rate(args: argparse.Namespace) -> int:
+    def progress(message: str) -> None:
+        print(message, file=sys.stderr, flush=True)
+
+    try:
+        corpus = load_corpus(args.corpus, args.text_field)
+        client = TeiClient(
+            args.url,
+            timeout_seconds=args.timeout,
+            api_key=os.environ.get(args.api_key_env),
+        )
+        constraints = Constraints(
+            args.max_p95_ms,
+            args.max_error_rate,
+            args.min_requests,
+            args.max_throughput_cv,
+        )
+        result = await discover_safe_rate(
+            client,
+            corpus,
+            batch_size=args.batch_size,
+            concurrency=args.concurrency,
+            min_rate=args.min_rate,
+            max_rate=args.max_rate,
+            step=args.step,
+            failure_window=args.failure_window,
+            duration_seconds=args.duration,
+            warmup_seconds=args.warmup,
+            repetitions=args.repetitions,
+            constraints=constraints,
+            progress=progress,
+            checkpoint=lambda validations: write_rate_discovery_checkpoint(
+                validations, args.output
+            ),
+        )
+        json_path, report_path = write_rate_discovery_outputs(result, args.output)
+    except (httpx.HTTPError, OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    if result.recommended is None:
+        print("No tested arrival rate satisfied the constraints.")
+    else:
+        print(
+            f"Recommended maximum: "
+            f"{result.recommended.target_texts_per_second:g} texts/s"
+        )
+    if result.non_monotonic:
+        print("Warning: observed a passing rate above a lower failing rate.")
+    print(f"Report: {report_path}")
+    print(f"Raw results: {json_path}")
+    return 0 if result.recommended is not None else 1
+
+
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
@@ -231,6 +322,17 @@ def main() -> None:
             exit_code = asyncio.run(run_validate(args))
         except KeyboardInterrupt:
             print("validation interrupted", file=sys.stderr)
+            exit_code = 130
+        raise SystemExit(exit_code)
+    if args.command == "discover-rate":
+        try:
+            exit_code = asyncio.run(run_discover_rate(args))
+        except KeyboardInterrupt:
+            print(
+                f"rate discovery interrupted; partial results may be available in "
+                f"{args.output / 'rate-discovery.partial.json'}",
+                file=sys.stderr,
+            )
             exit_code = 130
         raise SystemExit(exit_code)
 

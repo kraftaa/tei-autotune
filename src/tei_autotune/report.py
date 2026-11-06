@@ -4,7 +4,12 @@ import json
 from pathlib import Path
 
 from . import __version__
-from .models import CellResult, OptimizationResult, ValidationResult
+from .models import (
+    CellResult,
+    OptimizationResult,
+    RateDiscoveryResult,
+    ValidationResult,
+)
 from .optimizer import pareto_frontier
 
 
@@ -60,6 +65,45 @@ def write_validation_outputs(
     )
     report_path.write_text(render_validation_markdown(result), encoding="utf-8")
     return json_path, report_path
+
+
+def write_rate_discovery_outputs(
+    result: RateDiscoveryResult, output_dir: Path
+) -> tuple[Path, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    json_path = output_dir / "rate-discovery.json"
+    report_path = output_dir / "rate-discovery.md"
+    json_path.write_text(
+        json.dumps(result.to_dict(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    report_path.write_text(render_rate_discovery_markdown(result), encoding="utf-8")
+    (output_dir / "rate-discovery.partial.json").unlink(missing_ok=True)
+    return json_path, report_path
+
+
+def write_rate_discovery_checkpoint(
+    validations: list[ValidationResult], output_dir: Path
+) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "rate-discovery.partial.json"
+    temporary = output_dir / "rate-discovery.partial.json.tmp"
+    temporary.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "tool_version": __version__,
+                "status": "in_progress",
+                "validations": [item.to_dict() for item in validations],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(path)
+    return path
 
 
 def render_markdown(result: OptimizationResult) -> str:
@@ -251,6 +295,73 @@ def render_validation_markdown(result: ValidationResult) -> str:
         "Latency begins at the scheduled arrival time, so it includes waiting for an available client concurrency slot, HTTP transfer, JSON decoding, and validation.",
         "",
     ]
+    return "\n".join(lines)
+
+
+def render_rate_discovery_markdown(result: RateDiscoveryResult) -> str:
+    lines = [
+        "# TEI AutoTune safe-rate discovery",
+        "",
+        f"Endpoint: `{result.endpoint}`",
+        f"Generated: `{result.generated_at}`",
+        f"Configuration: batch {result.batch_size}, concurrency {result.concurrency}",
+        "",
+        "## Recommendation",
+        "",
+    ]
+    if result.recommended is None:
+        lines.append("No tested arrival rate satisfied all constraints.")
+    else:
+        cell = result.recommended.cell
+        lines.extend(
+            [
+                f"The highest passing tested rate is **{result.recommended.target_texts_per_second:g} texts/s** for this configuration.",
+                "",
+                f"- Achieved throughput: {cell.throughput_texts_per_second:,.1f} texts/s",
+                f"- Median p95 latency: {cell.p95_ms:,.1f} ms",
+                f"- Worst repeated-run p95: {cell.worst_p95_ms:,.1f} ms",
+                f"- Aggregate error rate: {cell.error_rate:.2%}",
+            ]
+        )
+    if result.non_monotonic:
+        lines.extend(
+            [
+                "",
+                "Warning: a higher tested rate passed after a lower rate failed. Treat the boundary as noisy and repeat it before production use.",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "## Tested rates",
+            "",
+            "| Offered | Achieved | Median p95 | Worst p95 | Errors | Scheduling lag p95 | Result |",
+            "|---:|---:|---:|---:|---:|---:|:---:|",
+        ]
+    )
+    for validation in result.validations:
+        cell = validation.cell
+        lag = (
+            f"{cell.schedule_lag_p95_ms:,.1f} ms"
+            if cell.schedule_lag_p95_ms is not None
+            else "n/a"
+        )
+        lines.append(
+            f"| {validation.target_texts_per_second:g}/s | "
+            f"{cell.throughput_texts_per_second:,.1f}/s | {cell.p95_ms:,.1f} ms | "
+            f"{cell.worst_p95_ms:,.1f} ms | {cell.error_rate:.2%} | {lag} | "
+            f"{'PASS' if validation.passed else 'FAIL'} |"
+        )
+    lines.extend(
+        [
+            "",
+            f"The ramp stopped after {result.failure_window} consecutive failing rates."
+            if result.stopped_early
+            else "The ramp reached the configured maximum rate.",
+            "A passing result applies only to this workload, endpoint, and test interval.",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 

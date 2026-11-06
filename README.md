@@ -124,6 +124,33 @@ starts at the intended arrival time, so client-side waiting for a concurrency
 slot is visible. A bounded queue prevents an overloaded validation run from
 exhausting client memory; arrivals rejected by that queue count as errors.
 
+### Discover a safe arrival rate
+
+After selecting a batch size and concurrency, automatically ramp the fixed
+arrival rate until the endpoint fails the constraints at two consecutive rates:
+
+```bash
+tei-autotune discover-rate \
+  --url http://localhost:8080 \
+  --corpus documents.jsonl \
+  --batch-size 1 \
+  --concurrency 2 \
+  --min-rate 20 \
+  --max-rate 40 \
+  --step 1 \
+  --failure-window 2 \
+  --duration 60 \
+  --repetitions 3 \
+  --max-p95-ms 200 \
+  --output rate-discovery/
+```
+
+The command tolerates an isolated failing rate because real measurements can be
+non-monotonic, but stops after the configured number of consecutive failures.
+It reports the highest passing tested rate and explicitly warns when a higher
+rate passes after a lower rate failed. `rate-discovery.partial.json` preserves
+completed rates if the ramp is interrupted.
+
 ## Important limits
 
 - Capacity testing adds load. Run it against an endpoint where the selected
