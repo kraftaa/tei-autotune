@@ -1,0 +1,132 @@
+{
+  "cell": {
+    "batch_size": 1,
+    "client_cpu_utilization": 0.04600240562574491,
+    "concurrency": 4,
+    "decode_p95_ms": 0.20569766638800502,
+    "error_rate": 0.1921875,
+    "mean_throughput_texts_per_second": 23.734567252056898,
+    "minimum_successful_requests": 256,
+    "offered_texts_per_second": 32.0,
+    "p50_ms": 753.68919770699,
+    "p95_ms": 920.6257032928988,
+    "runs": [
+      {
+        "batch_size": 1,
+        "client_cpu_seconds": 0.49570600000000004,
+        "client_cpu_utilization": 0.04522194611741983,
+        "compute_tokens": 50293,
+        "concurrency": 4,
+        "decode_p95_ms": 0.1799999736249447,
+        "duration_seconds": 10.961624665884301,
+        "error_rate": 0.184375,
+        "failed_requests": 59,
+        "offered_texts": 320,
+        "offered_texts_per_second": 32.0,
+        "p50_ms": 754.4831659179181,
+        "p95_ms": 918.8063750043511,
+        "repetition": 0,
+        "schedule_lag_p95_ms": 750.385208055377,
+        "scheduled_duration_seconds": 10.0,
+        "server_inference_p50_ms": 46.0,
+        "server_queue_p50_ms": 77.0,
+        "server_tokenization_p50_ms": 0.0,
+        "server_total_p50_ms": 156.0,
+        "status_counts": {
+          "client_queue_full": 59
+        },
+        "successful_requests": 261,
+        "successful_texts": 261,
+        "throughput_texts_per_second": 23.81033906518496,
+        "throughput_tokens_per_second": 4588.097251361483,
+        "transport_p95_ms": 244.07616700045764
+      },
+      {
+        "batch_size": 1,
+        "client_cpu_seconds": 0.5062139999999999,
+        "client_cpu_utilization": 0.04678286513407,
+        "compute_tokens": 49152,
+        "concurrency": 4,
+        "decode_p95_ms": 0.23139535915106535,
+        "duration_seconds": 10.82050016708672,
+        "error_rate": 0.2,
+        "failed_requests": 64,
+        "offered_texts": 320,
+        "offered_texts_per_second": 32.0,
+        "p50_ms": 752.8952294960618,
+        "p95_ms": 922.4450315814465,
+        "repetition": 1,
+        "schedule_lag_p95_ms": 745.9094172227196,
+        "scheduled_duration_seconds": 10.0,
+        "server_inference_p50_ms": 51.0,
+        "server_queue_p50_ms": 74.0,
+        "server_tokenization_p50_ms": 0.0,
+        "server_total_p50_ms": 160.5,
+        "status_counts": {
+          "client_queue_full": 64
+        },
+        "successful_requests": 256,
+        "successful_texts": 256,
+        "throughput_texts_per_second": 23.658795438928834,
+        "throughput_tokens_per_second": 4542.488724274336,
+        "transport_p95_ms": 240.83096877438948
+      }
+    ],
+    "schedule_lag_p95_ms": 748.1473126390483,
+    "server_inference_p50_ms": 48.5,
+    "server_queue_p50_ms": 75.5,
+    "server_tokenization_p50_ms": 0.0,
+    "server_total_p50_ms": 158.25,
+    "throughput_confidence_interval": [
+      22.77181059445174,
+      24.697323909662057
+    ],
+    "throughput_cv": 0.0045148295578053485,
+    "throughput_texts_per_second": 23.734567252056898,
+    "throughput_tokens_per_second": 4565.292987817909,
+    "transport_p95_ms": 242.45356788742356,
+    "worst_error_rate": 0.2,
+    "worst_p95_ms": 922.4450315814465
+  },
+  "constraints": {
+    "max_error_rate": 0.01,
+    "max_p95_ms": 200.0,
+    "max_throughput_cv": 0.15,
+    "min_successful_requests": 100
+  },
+  "corpus_summary": {
+    "characters_max": 900,
+    "characters_median": 594,
+    "characters_min": 147,
+    "characters_p95": 900.0,
+    "characters_total": 48054,
+    "items": 81
+  },
+  "endpoint": "http://127.0.0.1:8080",
+  "generated_at": "2026-11-06T18:49:05.826828+00:00",
+  "passed": false,
+  "schema_version": 1,
+  "server_info": {
+    "auto_truncate": true,
+    "docker_label": null,
+    "max_batch_requests": null,
+    "max_batch_tokens": 16384,
+    "max_client_batch_size": 32,
+    "max_concurrent_requests": 512,
+    "max_input_length": 512,
+    "model_dtype": "float16",
+    "model_id": "BAAI/bge-small-en-v1.5",
+    "model_sha": null,
+    "model_type": {
+      "embedding": {
+        "pooling": "cls"
+      }
+    },
+    "served_model_name": "BAAI/bge-small-en-v1.5",
+    "sha": null,
+    "tokenization_workers": 9,
+    "version": "1.9.3"
+  },
+  "target_texts_per_second": 32.0,
+  "tool_version": "0.2.0"
+}

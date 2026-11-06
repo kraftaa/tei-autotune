@@ -1,0 +1,132 @@
+{
+  "cell": {
+    "batch_size": 1,
+    "client_cpu_utilization": 0.05942186486885363,
+    "concurrency": 2,
+    "decode_p95_ms": 0.16273193759843707,
+    "error_rate": 0.0945945945945946,
+    "mean_throughput_texts_per_second": 31.669821821249208,
+    "minimum_successful_requests": 331,
+    "offered_texts_per_second": 37.0,
+    "p50_ms": 506.66617159731686,
+    "p95_ms": 621.8871703371403,
+    "runs": [
+      {
+        "batch_size": 1,
+        "client_cpu_seconds": 0.635393,
+        "client_cpu_utilization": 0.06015754605756689,
+        "compute_tokens": 62644,
+        "concurrency": 2,
+        "decode_p95_ms": 0.19108399283140898,
+        "duration_seconds": 10.562149582896382,
+        "error_rate": 0.10540540540540541,
+        "failed_requests": 39,
+        "offered_texts": 370,
+        "offered_texts_per_second": 37.0,
+        "p50_ms": 519.1476333420724,
+        "p95_ms": 642.2635599737987,
+        "repetition": 0,
+        "schedule_lag_p95_ms": 567.637562402524,
+        "scheduled_duration_seconds": 10.0,
+        "server_inference_p50_ms": 30.0,
+        "server_queue_p50_ms": 26.0,
+        "server_tokenization_p50_ms": 0.0,
+        "server_total_p50_ms": 56.0,
+        "status_counts": {
+          "client_queue_full": 39
+        },
+        "successful_requests": 331,
+        "successful_texts": 331,
+        "throughput_texts_per_second": 31.338317773495522,
+        "throughput_tokens_per_second": 5930.9896634527295,
+        "transport_p95_ms": 93.04779150988907
+      },
+      {
+        "batch_size": 1,
+        "client_cpu_seconds": 0.6216809999999999,
+        "client_cpu_utilization": 0.05868618368014037,
+        "compute_tokens": 63512,
+        "concurrency": 2,
+        "decode_p95_ms": 0.13437988236546514,
+        "duration_seconds": 10.593311083037406,
+        "error_rate": 0.08378378378378379,
+        "failed_requests": 31,
+        "offered_texts": 370,
+        "offered_texts_per_second": 37.0,
+        "p50_ms": 494.18470985256135,
+        "p95_ms": 601.5107807004821,
+        "repetition": 1,
+        "schedule_lag_p95_ms": 540.2228240622206,
+        "scheduled_duration_seconds": 10.0,
+        "server_inference_p50_ms": 29.0,
+        "server_queue_p50_ms": 26.0,
+        "server_tokenization_p50_ms": 0.0,
+        "server_total_p50_ms": 55.0,
+        "status_counts": {
+          "client_queue_full": 31
+        },
+        "successful_requests": 339,
+        "successful_texts": 339,
+        "throughput_texts_per_second": 32.00132586900289,
+        "throughput_tokens_per_second": 5995.4814412746655,
+        "transport_p95_ms": 91.23637441080061
+      }
+    ],
+    "schedule_lag_p95_ms": 553.9301932323724,
+    "server_inference_p50_ms": 29.5,
+    "server_queue_p50_ms": 26.0,
+    "server_tokenization_p50_ms": 0.0,
+    "server_total_p50_ms": 55.5,
+    "throughput_confidence_interval": [
+      27.457731390490896,
+      35.881912252007524
+    ],
+    "throughput_cv": 0.014803288852110952,
+    "throughput_texts_per_second": 31.669821821249208,
+    "throughput_tokens_per_second": 5963.235552363698,
+    "transport_p95_ms": 92.14208296034484,
+    "worst_error_rate": 0.10540540540540541,
+    "worst_p95_ms": 642.2635599737987
+  },
+  "constraints": {
+    "max_error_rate": 0.01,
+    "max_p95_ms": 200.0,
+    "max_throughput_cv": 0.15,
+    "min_successful_requests": 100
+  },
+  "corpus_summary": {
+    "characters_max": 900,
+    "characters_median": 594,
+    "characters_min": 147,
+    "characters_p95": 900.0,
+    "characters_total": 48054,
+    "items": 81
+  },
+  "endpoint": "http://127.0.0.1:8080",
+  "generated_at": "2026-11-06T18:48:22.337684+00:00",
+  "passed": false,
+  "schema_version": 1,
+  "server_info": {
+    "auto_truncate": true,
+    "docker_label": null,
+    "max_batch_requests": null,
+    "max_batch_tokens": 16384,
+    "max_client_batch_size": 32,
+    "max_concurrent_requests": 512,
+    "max_input_length": 512,
+    "model_dtype": "float16",
+    "model_id": "BAAI/bge-small-en-v1.5",
+    "model_sha": null,
+    "model_type": {
+      "embedding": {
+        "pooling": "cls"
+      }
+    },
+    "served_model_name": "BAAI/bge-small-en-v1.5",
+    "sha": null,
+    "tokenization_workers": 9,
+    "version": "1.9.3"
+  },
+  "target_texts_per_second": 37.0,
+  "tool_version": "0.2.0"
+}

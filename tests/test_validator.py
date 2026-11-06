@@ -4,8 +4,8 @@ import json
 import httpx
 
 from tei_autotune.client import TeiClient
-from tei_autotune.models import Constraints, WorkloadItem
-from tei_autotune.report import write_validation_outputs
+from tei_autotune.models import CellResult, Constraints, RunResult, WorkloadItem
+from tei_autotune.report import _diagnose_cell, write_validation_outputs
 from tei_autotune.validator import validate_fixed_rate
 
 
@@ -68,3 +68,23 @@ def test_overload_drops_arrivals_instead_of_growing_without_bound():
     assert result.status_counts["client_queue_full"] > 0
     assert result.failed_requests > 0
     assert result.requests == result.offered_texts
+
+
+def test_scheduling_lag_does_not_claim_more_concurrency_will_help():
+    run = RunResult(
+        batch_size=1,
+        concurrency=2,
+        repetition=0,
+        duration_seconds=10,
+        successful_requests=100,
+        failed_requests=0,
+        successful_texts=100,
+        compute_tokens=0,
+        latencies_ms=[400] * 100,
+        schedule_lag_ms=[300] * 100,
+    )
+
+    diagnostic = _diagnose_cell(CellResult(1, 2, [run]))
+
+    assert "offered load exceeds" in diagnostic.lower()
+    assert "higher concurrency will increase capacity" in diagnostic.lower()

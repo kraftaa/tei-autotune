@@ -258,7 +258,11 @@ def _diagnose_cell(cell: CellResult) -> str:
     if cell.client_cpu_utilization >= 0.85:
         return "The load-generator process is near one full CPU core; client work may limit throughput."
     if cell.schedule_lag_p95_ms is not None and cell.schedule_lag_p95_ms > cell.p95_ms * 0.25:
-        return "Client-side concurrency is too low for the offered arrival rate; requests spend substantial time waiting for a slot."
+        return (
+            "The offered load exceeds what this configuration can serve promptly; "
+            "requests spend substantial time waiting for a client slot. Scheduling "
+            "lag alone does not show that higher concurrency will increase capacity."
+        )
     queue = cell.server_queue_p50_ms
     inference = cell.server_inference_p50_ms
     tokenization = cell.server_tokenization_p50_ms

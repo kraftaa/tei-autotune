@@ -137,6 +137,14 @@ exhausting client memory; arrivals rejected by that queue count as errors.
   and test interval.
 - `--seed` controls randomized experiment order; its default is `42`.
 
+## Case study
+
+The [Apple M1 Pro / bge-small case study](case-studies/apple-m1-pro-bge-small/README.md)
+runs adaptive optimization, an exhaustive low-concurrency grid, and fixed-rate
+validation against a real TEI 1.9.3 server. It also documents a negative result:
+larger batches and additional concurrency reduced performance on that Metal
+backend.
+
 ## Development
 
 ```bash
