@@ -128,6 +128,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=2,
         help="stop after this many consecutive failing rates",
     )
+    discover_parser.add_argument(
+        "--headroom",
+        type=_rate,
+        default=0.10,
+        help="production headroom below the confirmed boundary",
+    )
+    discover_parser.add_argument(
+        "--confirmation-cooldown",
+        type=_nonnegative_float,
+        default=10.0,
+        help="seconds to wait before confirming a boundary candidate",
+    )
+    discover_parser.add_argument(
+        "--skip-confirmation",
+        action="store_true",
+        help="do not retest the highest passing rate after the ramp",
+    )
     discover_parser.add_argument("--max-p95-ms", type=_positive_float, default=200.0)
     discover_parser.add_argument("--max-error-rate", type=_rate, default=0.01)
     discover_parser.add_argument("--min-requests", type=_positive_int, default=100)
@@ -275,13 +292,16 @@ async def run_discover_rate(args: argparse.Namespace) -> int:
             max_rate=args.max_rate,
             step=args.step,
             failure_window=args.failure_window,
+            headroom=args.headroom,
+            confirm=not args.skip_confirmation,
+            confirmation_cooldown_seconds=args.confirmation_cooldown,
             duration_seconds=args.duration,
             warmup_seconds=args.warmup,
             repetitions=args.repetitions,
             constraints=constraints,
             progress=progress,
-            checkpoint=lambda validations: write_rate_discovery_checkpoint(
-                validations, args.output
+            checkpoint=lambda validations, confirmations: write_rate_discovery_checkpoint(
+                validations, confirmations, args.output
             ),
         )
         json_path, report_path = write_rate_discovery_outputs(result, args.output)
@@ -290,15 +310,28 @@ async def run_discover_rate(args: argparse.Namespace) -> int:
         return 2
 
     if result.recommended is None:
-        print("No tested arrival rate satisfied the constraints.")
+        if result.ramp_recommended is None:
+            print("No ramp rate satisfied the constraints.")
+        else:
+            print("No ramp candidate passed fresh confirmation.")
     else:
+        label = (
+            "Confirmed maximum"
+            if result.confirmation_enabled
+            else "Highest passing rate"
+        )
         print(
-            f"Recommended maximum: "
+            f"{label}: "
             f"{result.recommended.target_texts_per_second:g} texts/s"
         )
+        if result.production_rate is not None:
+            print(f"Suggested production rate: {result.production_rate:g} texts/s")
+        elif result.headroom > 0:
+            print("No tested passing rate provides the requested production headroom.")
     if result.non_monotonic:
         print("Warning: observed a passing rate above a lower failing rate.")
     print(f"Report: {report_path}")
+    print(f"HTML: {args.output / 'rate-discovery.html'}")
     print(f"Raw results: {json_path}")
     return 0 if result.recommended is not None else 1
 

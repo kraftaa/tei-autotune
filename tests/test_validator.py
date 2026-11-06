@@ -13,6 +13,7 @@ from tei_autotune.models import (
 )
 from tei_autotune.report import (
     _diagnose_cell,
+    render_rate_discovery_html,
     render_rate_discovery_markdown,
     write_validation_outputs,
 )
@@ -138,6 +139,9 @@ def test_rate_discovery_tolerates_one_failure_and_stops_after_two(monkeypatch):
             max_rate=35,
             step=1,
             failure_window=2,
+            headroom=0,
+            confirm=True,
+            confirmation_cooldown_seconds=0,
             duration_seconds=1,
             warmup_seconds=0,
             repetitions=1,
@@ -154,8 +158,35 @@ def test_rate_discovery_tolerates_one_failure_and_stops_after_two(monkeypatch):
     ]
     assert result.recommended is not None
     assert result.recommended.target_texts_per_second == 27
+    assert result.production_rate == 27
+    assert len(result.confirmations) == 1
     assert result.non_monotonic
     assert result.stopped_early
     report = render_rate_discovery_markdown(result)
     assert "27 texts/s" in report
     assert "boundary as noisy" in report
+    assert "Boundary confirmation" in report
+    html = render_rate_discovery_html(result)
+    assert "<svg" in html
+    assert "Confirmed maximum: 27 texts/s" in html
+
+
+def test_failure_reasons_name_each_violated_constraint():
+    run = RunResult(
+        batch_size=1,
+        concurrency=1,
+        repetition=0,
+        duration_seconds=10,
+        successful_requests=5,
+        failed_requests=5,
+        successful_texts=5,
+        compute_tokens=0,
+        latencies_ms=[250] * 5,
+    )
+    reasons = CellResult(1, 1, [run]).failure_reasons(
+        Constraints(200, 0.01, min_successful_requests=100)
+    )
+
+    assert any("worst p95" in reason for reason in reasons)
+    assert any("worst error rate" in reason for reason in reasons)
+    assert any("minimum successful requests" in reason for reason in reasons)

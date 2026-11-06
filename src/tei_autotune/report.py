@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from html import escape
 from pathlib import Path
 
 from . import __version__
@@ -73,17 +74,21 @@ def write_rate_discovery_outputs(
     output_dir.mkdir(parents=True, exist_ok=True)
     json_path = output_dir / "rate-discovery.json"
     report_path = output_dir / "rate-discovery.md"
+    html_path = output_dir / "rate-discovery.html"
     json_path.write_text(
         json.dumps(result.to_dict(), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     report_path.write_text(render_rate_discovery_markdown(result), encoding="utf-8")
+    html_path.write_text(render_rate_discovery_html(result), encoding="utf-8")
     (output_dir / "rate-discovery.partial.json").unlink(missing_ok=True)
     return json_path, report_path
 
 
 def write_rate_discovery_checkpoint(
-    validations: list[ValidationResult], output_dir: Path
+    validations: list[ValidationResult],
+    confirmations: list[ValidationResult],
+    output_dir: Path,
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / "rate-discovery.partial.json"
@@ -95,6 +100,7 @@ def write_rate_discovery_checkpoint(
                 "tool_version": __version__,
                 "status": "in_progress",
                 "validations": [item.to_dict() for item in validations],
+                "confirmations": [item.to_dict() for item in confirmations],
             },
             indent=2,
             sort_keys=True,
@@ -289,12 +295,20 @@ def render_validation_markdown(result: ValidationResult) -> str:
         f"- Error rate: {cell.error_rate:.2%}",
         f"- Throughput variation: {cell.throughput_cv:.1%}",
         f"- p95 client scheduling lag: {lag:,.1f} ms" if lag is not None else "- p95 client scheduling lag: n/a",
-        "",
-        f"Diagnostic: {_diagnose_cell(cell)}",
-        "",
-        "Latency begins at the scheduled arrival time, so it includes waiting for an available client concurrency slot, HTTP transfer, JSON decoding, and validation.",
-        "",
     ]
+    failures = cell.failure_reasons(result.constraints)
+    if failures:
+        lines.extend(["", "Failed constraints:"])
+        lines.extend(f"- {reason}" for reason in failures)
+    lines.extend(
+        [
+            "",
+            f"Diagnostic: {_diagnose_cell(cell)}",
+            "",
+            "Latency begins at the scheduled arrival time, so it includes waiting for an available client concurrency slot, HTTP transfer, JSON decoding, and validation.",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -310,12 +324,18 @@ def render_rate_discovery_markdown(result: RateDiscoveryResult) -> str:
         "",
     ]
     if result.recommended is None:
-        lines.append("No tested arrival rate satisfied all constraints.")
+        if result.ramp_recommended is None:
+            lines.append("No ramp rate satisfied all constraints.")
+        else:
+            lines.append(
+                "At least one ramp rate passed, but no boundary candidate passed fresh confirmation."
+            )
     else:
         cell = result.recommended.cell
+        label = "confirmed" if result.confirmation_enabled else "passing tested"
         lines.extend(
             [
-                f"The highest passing tested rate is **{result.recommended.target_texts_per_second:g} texts/s** for this configuration.",
+                f"The highest {label} rate is **{result.recommended.target_texts_per_second:g} texts/s** for this configuration.",
                 "",
                 f"- Achieved throughput: {cell.throughput_texts_per_second:,.1f} texts/s",
                 f"- Median p95 latency: {cell.p95_ms:,.1f} ms",
@@ -323,6 +343,14 @@ def render_rate_discovery_markdown(result: RateDiscoveryResult) -> str:
                 f"- Aggregate error rate: {cell.error_rate:.2%}",
             ]
         )
+        if result.production_rate is not None:
+            lines.append(
+                f"- Suggested production rate with {result.headroom:.0%} headroom: **{result.production_rate:g} texts/s**"
+            )
+        elif result.headroom > 0:
+            lines.append(
+                f"- No tested passing rate provides the requested {result.headroom:.0%} headroom"
+            )
     if result.non_monotonic:
         lines.extend(
             [
@@ -335,8 +363,8 @@ def render_rate_discovery_markdown(result: RateDiscoveryResult) -> str:
             "",
             "## Tested rates",
             "",
-            "| Offered | Achieved | Median p95 | Worst p95 | Errors | Scheduling lag p95 | Result |",
-            "|---:|---:|---:|---:|---:|---:|:---:|",
+            "| Offered | Achieved | Median p95 | Worst p95 | Errors | Scheduling lag p95 | Result | Failed constraints |",
+            "|---:|---:|---:|---:|---:|---:|:---:|:---|",
         ]
     )
     for validation in result.validations:
@@ -350,8 +378,20 @@ def render_rate_discovery_markdown(result: RateDiscoveryResult) -> str:
             f"| {validation.target_texts_per_second:g}/s | "
             f"{cell.throughput_texts_per_second:,.1f}/s | {cell.p95_ms:,.1f} ms | "
             f"{cell.worst_p95_ms:,.1f} ms | {cell.error_rate:.2%} | {lag} | "
-            f"{'PASS' if validation.passed else 'FAIL'} |"
+            f"{'PASS' if validation.passed else 'FAIL'} | "
+            f"{'; '.join(cell.failure_reasons(result.constraints)) or '—'} |"
         )
+    if result.confirmations:
+        lines.extend(["", "## Boundary confirmation", ""])
+        for confirmation in result.confirmations:
+            reasons = "; ".join(
+                confirmation.cell.failure_reasons(result.constraints)
+            )
+            lines.append(
+                f"- {confirmation.target_texts_per_second:g} texts/s: "
+                f"{'PASS' if confirmation.passed else 'FAIL'}"
+                + (f" — {reasons}" if reasons else "")
+            )
     lines.extend(
         [
             "",
@@ -363,6 +403,79 @@ def render_rate_discovery_markdown(result: RateDiscoveryResult) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def render_rate_discovery_html(result: RateDiscoveryResult) -> str:
+    validations = result.validations
+    rates = [item.target_texts_per_second for item in validations]
+    latencies = [item.cell.worst_p95_ms for item in validations]
+    width, height, pad = 820, 340, 58
+    min_rate, max_rate = min(rates), max(rates)
+    max_latency = max(max(latencies), result.constraints.max_p95_ms) * 1.1
+
+    def x(value: float) -> float:
+        span = max(max_rate - min_rate, 1.0)
+        return pad + (value - min_rate) / span * (width - 2 * pad)
+
+    def y(value: float) -> float:
+        return height - pad - value / max_latency * (height - 2 * pad)
+
+    points = " ".join(
+        f'{x(rate):.1f},{y(latency):.1f}'
+        for rate, latency in zip(rates, latencies)
+    )
+    circles = "".join(
+        f'<circle cx="{x(item.target_texts_per_second):.1f}" '
+        f'cy="{y(item.cell.worst_p95_ms):.1f}" r="6" '
+        f'fill="{"#16803c" if item.passed else "#c83232"}"><title>'
+        f'{item.target_texts_per_second:g}/s: {item.cell.worst_p95_ms:.1f} ms'
+        f'</title></circle>'
+        for item in validations
+    )
+    rows = []
+    for item in validations:
+        reasons = "; ".join(item.cell.failure_reasons(result.constraints)) or "—"
+        rows.append(
+            "<tr>"
+            f"<td>{item.target_texts_per_second:g}/s</td>"
+            f"<td>{item.cell.throughput_texts_per_second:.1f}/s</td>"
+            f"<td>{item.cell.p95_ms:.1f} ms</td>"
+            f"<td>{item.cell.worst_p95_ms:.1f} ms</td>"
+            f"<td>{item.cell.error_rate:.2%}</td>"
+            f'<td class="{"pass" if item.passed else "fail"}">'
+            f'{"PASS" if item.passed else "FAIL"}</td>'
+            f"<td>{escape(reasons)}</td>"
+            "</tr>"
+        )
+    recommendation = (
+        f"Confirmed maximum: {result.recommended.target_texts_per_second:g} texts/s"
+        if result.recommended is not None and result.confirmation_enabled
+        else (
+            f"Highest passing rate: {result.recommended.target_texts_per_second:g} texts/s"
+            if result.recommended is not None
+            else "No confirmed safe rate"
+        )
+    )
+    production = (
+        f"Suggested production rate: {result.production_rate:g} texts/s"
+        if result.production_rate is not None
+        else "No tested rate provides the requested headroom"
+    )
+    threshold_y = y(result.constraints.max_p95_ms)
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TEI AutoTune safe-rate discovery</title>
+<style>body{{font:16px system-ui;max-width:1040px;margin:40px auto;padding:0 20px;color:#18202a}}h1{{margin-bottom:4px}}.cards{{display:flex;gap:16px;flex-wrap:wrap}}.card{{background:#f4f6f8;border-radius:10px;padding:16px 20px;font-weight:650}}svg{{width:100%;height:auto;background:#fbfcfd;border:1px solid #d9dee5;border-radius:10px}}table{{border-collapse:collapse;width:100%}}th,td{{padding:9px;border-bottom:1px solid #d9dee5;text-align:left}}.pass{{color:#16803c;font-weight:700}}.fail{{color:#c83232;font-weight:700}}small{{color:#586576}}</style></head>
+<body><h1>TEI AutoTune safe-rate discovery</h1><small>{escape(result.endpoint)} · batch {result.batch_size}, concurrency {result.concurrency}</small>
+<div class="cards"><div class="card">{escape(recommendation)}</div><div class="card">{escape(production)}</div></div>
+<h2>Worst repeated-run p95 latency</h2>
+<svg viewBox="0 0 {width} {height}" role="img" aria-label="Worst p95 latency by offered rate">
+<line x1="{pad}" y1="{height-pad}" x2="{width-pad}" y2="{height-pad}" stroke="#718096"/><line x1="{pad}" y1="{pad}" x2="{pad}" y2="{height-pad}" stroke="#718096"/>
+<line x1="{pad}" y1="{threshold_y:.1f}" x2="{width-pad}" y2="{threshold_y:.1f}" stroke="#d08b00" stroke-dasharray="7 5"/><text x="{pad+6}" y="{threshold_y-7:.1f}" fill="#8a5b00">{result.constraints.max_p95_ms:g} ms limit</text>
+<polyline points="{points}" fill="none" stroke="#4263eb" stroke-width="3"/>{circles}
+<text x="{width/2:.0f}" y="{height-12}" text-anchor="middle">Offered texts/s</text><text x="16" y="{height/2:.0f}" transform="rotate(-90 16 {height/2:.0f})" text-anchor="middle">Worst p95 ms</text></svg>
+<h2>Measurements</h2><table><thead><tr><th>Offered</th><th>Achieved</th><th>Median p95</th><th>Worst p95</th><th>Errors</th><th>Result</th><th>Failed constraints</th></tr></thead><tbody>{''.join(rows)}</tbody></table>
+</body></html>"""
 
 
 def _diagnose_cell(cell: CellResult) -> str:

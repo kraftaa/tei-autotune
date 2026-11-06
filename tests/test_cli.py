@@ -41,3 +41,6 @@ def test_discover_rate_parser():
 
     assert args.step == 1
     assert args.failure_window == 2
+    assert args.headroom == 0.10
+    assert args.confirmation_cooldown == 10
+    assert not args.skip_confirmation

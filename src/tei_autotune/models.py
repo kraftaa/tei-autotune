@@ -262,6 +262,30 @@ class CellResult:
             and self.throughput_cv <= max_throughput_cv
         )
 
+    def failure_reasons(self, constraints: "Constraints") -> list[str]:
+        reasons = []
+        if self.worst_p95_ms > constraints.max_p95_ms:
+            reasons.append(
+                f"worst p95 {self.worst_p95_ms:.1f} ms exceeds "
+                f"{constraints.max_p95_ms:.1f} ms"
+            )
+        if self.worst_error_rate > constraints.max_error_rate:
+            reasons.append(
+                f"worst error rate {self.worst_error_rate:.2%} exceeds "
+                f"{constraints.max_error_rate:.2%}"
+            )
+        if self.minimum_successful_requests < constraints.min_successful_requests:
+            reasons.append(
+                f"minimum successful requests {self.minimum_successful_requests} is below "
+                f"{constraints.min_successful_requests}"
+            )
+        if self.throughput_cv > constraints.max_throughput_cv:
+            reasons.append(
+                f"throughput variation {self.throughput_cv:.1%} exceeds "
+                f"{constraints.max_throughput_cv:.1%}"
+            )
+        return reasons
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "batch_size": self.batch_size,
@@ -372,8 +396,14 @@ class RateDiscoveryResult:
     max_rate: float
     step: float
     failure_window: int
+    headroom: float
+    confirmation_enabled: bool
+    confirmation_cooldown_seconds: float
     validations: list[ValidationResult]
+    confirmations: list[ValidationResult]
+    ramp_recommended: ValidationResult | None
     recommended: ValidationResult | None
+    production_rate: float | None
     stopped_early: bool
     non_monotonic: bool
     generated_at: str = field(
@@ -382,7 +412,7 @@ class RateDiscoveryResult:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "tool_version": __version__,
             "generated_at": self.generated_at,
             "endpoint": self.endpoint,
@@ -395,14 +425,24 @@ class RateDiscoveryResult:
             "max_rate": self.max_rate,
             "step": self.step,
             "failure_window": self.failure_window,
+            "headroom": self.headroom,
+            "confirmation_enabled": self.confirmation_enabled,
+            "confirmation_cooldown_seconds": self.confirmation_cooldown_seconds,
+            "ramp_recommended_rate": (
+                self.ramp_recommended.target_texts_per_second
+                if self.ramp_recommended is not None
+                else None
+            ),
             "recommended_rate": (
                 self.recommended.target_texts_per_second
                 if self.recommended is not None
                 else None
             ),
+            "production_rate": self.production_rate,
             "stopped_early": self.stopped_early,
             "non_monotonic": self.non_monotonic,
             "validations": [item.to_dict() for item in self.validations],
+            "confirmations": [item.to_dict() for item in self.confirmations],
         }
 
 

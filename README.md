@@ -139,6 +139,8 @@ tei-autotune discover-rate \
   --max-rate 40 \
   --step 1 \
   --failure-window 2 \
+  --headroom 0.10 \
+  --confirmation-cooldown 10 \
   --duration 60 \
   --repetitions 3 \
   --max-p95-ms 200 \
@@ -147,9 +149,12 @@ tei-autotune discover-rate \
 
 The command tolerates an isolated failing rate because real measurements can be
 non-monotonic, but stops after the configured number of consecutive failures.
-It reports the highest passing tested rate and explicitly warns when a higher
-rate passes after a lower rate failed. `rate-discovery.partial.json` preserves
-completed rates if the ramp is interrupted.
+It cools down and confirms the strongest ramp candidate with a fresh validation,
+falling back to lower passing candidates when confirmation fails. The production
+suggestion is an actually tested passing rate below the requested headroom, not
+an interpolated number. Reports explain every failed constraint and include a
+standalone HTML chart. `rate-discovery.partial.json` preserves completed ramp and
+confirmation measurements if the command is interrupted.
 
 ## Important limits
 
