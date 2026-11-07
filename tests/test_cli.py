@@ -44,3 +44,20 @@ def test_discover_rate_parser():
     assert args.headroom == 0.10
     assert args.confirmation_cooldown == 10
     assert not args.skip_confirmation
+
+
+def test_simple_run_parser_needs_only_url_and_corpus():
+    args = build_parser().parse_args(
+        [
+            "run",
+            "--url",
+            "http://mock-tei",
+            "--corpus",
+            "documents.txt",
+        ]
+    )
+
+    assert args.max_p95_ms == 200
+    assert args.headroom == 0.10
+    assert not args.thorough
+    assert str(args.output) == "tei-autotune-results"

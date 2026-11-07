@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 - 2026-11-06
+
+- Add `tei-autotune run`, a one-command workflow that optimizes client settings,
+  derives an arrival-rate ramp, confirms the safe boundary, and writes one
+  summary.
+- Accept plain text corpora with one document per line in addition to JSONL.
+- Add quick defaults and an optional `--thorough` profile.
+
 ## 0.4.0 - 2026-11-06
 
 - Confirm the strongest safe-rate candidate with a fresh validation after a

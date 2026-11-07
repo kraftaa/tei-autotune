@@ -13,6 +13,7 @@ from .client import TeiClient
 from .corpus import load_corpus
 from .models import Constraints
 from .optimizer import optimize
+from .pipeline import run_pipeline
 from .report import (
     write_checkpoint,
     write_outputs,
@@ -33,6 +34,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=__version__)
     subparsers = parser.add_subparsers(dest="command", required=True)
+    run_parser = subparsers.add_parser(
+        "run", help="optimize settings and discover a safe rate in one command"
+    )
+    run_parser.add_argument("--url", required=True, help="TEI base URL")
+    run_parser.add_argument(
+        "--corpus",
+        required=True,
+        type=Path,
+        help="plain text (one document per line) or JSONL corpus",
+    )
+    run_parser.add_argument("--text-field", default="text")
+    run_parser.add_argument("--max-p95-ms", type=_positive_float, default=200.0)
+    run_parser.add_argument("--max-error-rate", type=_rate, default=0.01)
+    run_parser.add_argument("--headroom", type=_rate, default=0.10)
+    run_parser.add_argument("--timeout", type=_positive_float, default=120.0)
+    run_parser.add_argument("--api-key-env", default="TEI_API_KEY")
+    run_parser.add_argument(
+        "--thorough",
+        action="store_true",
+        help="use longer three-repetition measurements",
+    )
+    run_parser.add_argument(
+        "--output", type=Path, default=Path("tei-autotune-results")
+    )
+
     optimize_parser = subparsers.add_parser("optimize", help="run an optimization sweep")
     optimize_parser.add_argument("--url", required=True, help="TEI base URL")
     optimize_parser.add_argument("--corpus", required=True, type=Path, help="JSONL corpus")
@@ -221,6 +247,59 @@ async def run_optimize(args: argparse.Namespace) -> int:
     return 0
 
 
+async def run_simple(args: argparse.Namespace) -> int:
+    def progress(message: str) -> None:
+        print(message, file=sys.stderr, flush=True)
+
+    try:
+        corpus = load_corpus(args.corpus, args.text_field)
+        client = TeiClient(
+            args.url,
+            timeout_seconds=args.timeout,
+            api_key=os.environ.get(args.api_key_env),
+        )
+        constraints = Constraints(
+            args.max_p95_ms,
+            args.max_error_rate,
+            100 if args.thorough else 10,
+            0.10,
+        )
+        optimization, discovery = await run_pipeline(
+            client,
+            corpus,
+            constraints=constraints,
+            headroom=args.headroom,
+            thorough=args.thorough,
+            output_dir=args.output,
+            progress=progress,
+        )
+    except (httpx.HTTPError, OSError, UnicodeError, ValueError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
+
+    if optimization.recommended is None:
+        print("No client configuration satisfied the constraints.")
+        print(f"Summary: {args.output / 'summary.md'}")
+        return 1
+    recommendation = optimization.recommended
+    print(
+        f"Client settings: batch={recommendation.batch_size} "
+        f"concurrency={recommendation.concurrency}"
+    )
+    if discovery and discovery.recommended:
+        print(
+            f"Confirmed capacity: "
+            f"{discovery.recommended.target_texts_per_second:g} texts/s"
+        )
+        if discovery.production_rate is not None:
+            print(f"Production rate: {discovery.production_rate:g} texts/s")
+    else:
+        print("No arrival-rate candidate passed fresh confirmation.")
+    print(f"Summary: {args.output / 'summary.md'}")
+    print(f"HTML: {args.output / 'safe-rate' / 'rate-discovery.html'}")
+    return 0 if discovery and discovery.recommended else 1
+
+
 async def run_validate(args: argparse.Namespace) -> int:
     def progress(message: str) -> None:
         print(message, file=sys.stderr, flush=True)
@@ -339,6 +418,16 @@ async def run_discover_rate(args: argparse.Namespace) -> int:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+    if args.command == "run":
+        try:
+            exit_code = asyncio.run(run_simple(args))
+        except KeyboardInterrupt:
+            print(
+                f"run interrupted; partial results remain in {args.output}",
+                file=sys.stderr,
+            )
+            exit_code = 130
+        raise SystemExit(exit_code)
     if args.command == "optimize":
         try:
             exit_code = asyncio.run(run_optimize(args))

@@ -1,9 +1,9 @@
 # TEI AutoTune
 
-TEI AutoTune finds an efficient client batch size and request concurrency for a
-Hugging Face Text Embeddings Inference (TEI) endpoint. It tests a representative
-JSONL corpus, rejects configurations that violate latency or error constraints,
-and produces a recommendation plus reproducible raw results.
+TEI AutoTune finds an efficient client batch size, concurrency, and safe arrival
+rate for a Hugging Face Text Embeddings Inference (TEI) endpoint. It tests a
+representative corpus, rejects configurations that violate latency or error
+constraints, and produces a recommendation plus reproducible raw results.
 
 The tool answers a deliberately narrow question: **which client-side operating
 point makes good use of this existing endpoint for this workload?** It does not
@@ -13,28 +13,62 @@ bottleneck in the surrounding application.
 ## Install
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
+python -m pip install git+https://github.com/kraftaa/tei-autotune.git
 ```
 
-## Optimize an endpoint
+## Quick start
 
-The corpus may contain JSON strings:
+Create `documents.txt` with one representative document or chunk per line, then
+run one command:
+
+```bash
+tei-autotune run \
+  --url http://localhost:8080 \
+  --corpus documents.txt
+```
+
+TEI AutoTune will:
+
+1. Find an efficient client batch size and concurrency.
+2. Measure saturated endpoint capacity.
+3. Ramp real arrival rates around that capacity.
+4. Confirm the strongest passing boundary after cooldown.
+5. Recommend a tested production rate with 10% headroom.
+
+Results are written to `tei-autotune-results/`. Start with `summary.md`, then
+open `safe-rate/rate-discovery.html` for the chart. The default profile is a
+practical initial measurement. For longer three-repetition measurements, add
+`--thorough`:
+
+```bash
+tei-autotune run \
+  --url http://localhost:8080 \
+  --corpus documents.txt \
+  --thorough
+```
+
+For an authenticated endpoint, set `TEI_API_KEY`; the key is never written to
+the result files.
+
+## Advanced commands
+
+The corpus may also use newline-delimited JSON. Each line can be a JSON string:
 
 ```jsonl
 "First document to embed"
 "A longer document representative of production traffic"
 ```
 
-or objects containing a text field:
+or an object containing a text field:
 
 ```jsonl
 {"text": "First document to embed"}
 {"text": "A longer document representative of production traffic"}
 ```
 
-Run a sweep:
+### Optimize an endpoint
+
+Run only the client-configuration sweep:
 
 ```bash
 tei-autotune optimize \
@@ -51,8 +85,7 @@ tei-autotune optimize \
   --output results/
 ```
 
-For an authenticated endpoint, set `TEI_API_KEY`; the key is never written to
-the result files. Use `--api-key-env NAME` to read another environment variable.
+Use `--api-key-env NAME` to read an API key from another environment variable.
 
 Outputs:
 

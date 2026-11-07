@@ -8,12 +8,16 @@ from .models import WorkloadItem, percentile
 
 
 def load_corpus(path: Path, text_field: str = "text") -> list[WorkloadItem]:
-    """Load newline-delimited JSON strings or objects containing a text field."""
+    """Load plain-text lines or JSONL strings/objects containing a text field."""
     items: list[WorkloadItem] = []
+    plain_text = path.suffix.lower() in {".txt", ".text"}
     with path.open(encoding="utf-8") as corpus_file:
         for line_number, raw_line in enumerate(corpus_file, start=1):
             line = raw_line.strip()
             if not line:
+                continue
+            if plain_text:
+                items.append(WorkloadItem(text=line))
                 continue
             try:
                 value = json.loads(line)
