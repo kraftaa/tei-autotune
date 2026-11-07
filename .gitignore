@@ -6,4 +6,6 @@ __pycache__/
 dist/
 build/
 results/
-
+tei-autotune-results/
+experiments/
+documents.txt
