@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tei
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: tei-autotune-benchmark
+  template:
+    metadata:
+      labels:
+        app: tei-autotune-benchmark
+    spec:
+      nodeSelector:
+        purpose: gpu
+        nodegroup: gpu-g5-xlarge
+      tolerations:
+        - key: purpose
+          operator: Equal
+          value: gpu
+          effect: NoSchedule
+      containers:
+        - name: tei
+          image: ghcr.io/huggingface/text-embeddings-inference:86-1.9
+          args:
+            - --model-id
+            - BAAI/bge-small-en-v1.5
+            - --port
+            - "80"
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests:
+              cpu: "2"
+              memory: 8Gi
+              nvidia.com/gpu: "1"
+            limits:
+              memory: 12Gi
+              nvidia.com/gpu: "1"
+          readinessProbe:
+            httpGet:
+              path: /info
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 240
+          volumeMounts:
+            - name: model-cache
+              mountPath: /data
+      volumes:
+        - name: model-cache
+          emptyDir: {}
+

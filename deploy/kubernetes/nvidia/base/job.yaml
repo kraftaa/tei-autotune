@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tei-autotune
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: tei-autotune
+          image: python:3.12-slim
+          command:
+            - /bin/sh
+            - -lc
+          args:
+            - |
+              set -eu
+              python - <<'PY'
+              import time
+              import urllib.request
+
+              for attempt in range(240):
+                  try:
+                      with urllib.request.urlopen("http://tei/info", timeout=2) as response:
+                          if response.status == 200:
+                              break
+                  except Exception:
+                      pass
+                  time.sleep(5)
+              else:
+                  raise SystemExit("TEI was not ready after 20 minutes")
+              PY
+              python -m pip install --no-cache-dir \
+              https://github.com/kraftaa/tei-autotune/releases/download/v0.5.1/tei_autotune-0.5.1-py3-none-any.whl
+              tei-autotune run \
+              --url http://tei \
+              --corpus /corpus/documents.txt \
+              --thorough \
+              --output /results
+          resources:
+            requests:
+              cpu: "2"
+              memory: 2Gi
+            limits:
+              memory: 4Gi
+          volumeMounts:
+            - name: corpus
+              mountPath: /corpus
+              readOnly: true
+            - name: results
+              mountPath: /results
+      volumes:
+        - name: corpus
+          configMap:
+            name: tei-autotune-corpus
+        - name: results
+          emptyDir: {}

@@ -32,11 +32,11 @@ THOROUGH_PROFILE = RunProfile(10, 60, 5, 3, 10)
 
 
 def derive_rate_plan(capacity: float) -> tuple[float, float, float]:
-    """Create a compact ramp spanning 50% to 110% of measured capacity."""
+    """Create a compact ramp spanning 40% to 110% of measured capacity."""
     if capacity <= 0:
         raise ValueError("measured capacity must be positive")
     step = max(1.0, round(capacity * 0.10, 1))
-    minimum = max(step, ceil(capacity * 0.50 / step) * step)
+    minimum = max(step, round(capacity * 0.40, 1))
     maximum = ceil(capacity * 1.10 / step) * step
     return round(minimum, 10), round(maximum, 10), round(step, 10)
 

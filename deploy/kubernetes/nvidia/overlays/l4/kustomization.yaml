@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: ghcr.io/huggingface/text-embeddings-inference
+    newName: ghcr.io/huggingface/text-embeddings-inference
+    newTag: 89-1.9
+patches:
+  - target:
+      kind: Deployment
+      name: tei
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/nodeSelector/nodegroup
+        value: gpu-g6-xlarge
+

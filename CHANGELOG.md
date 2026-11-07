@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.1 - 2026-11-07
+
+- Start automatic safe-rate ramps at 40% of saturated capacity so a confirmed
+  low boundary still has a tested candidate available for production headroom.
+- Add reproducible Kubernetes benchmark overlays for NVIDIA A10G, L4, and L40S
+  hardware.
+
 ## 0.5.0 - 2026-11-06
 
 - Add `tei-autotune run`, a one-command workflow that optimizes client settings,

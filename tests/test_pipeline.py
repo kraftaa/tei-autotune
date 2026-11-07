@@ -34,9 +34,16 @@ def _cell(batch=1, concurrency=2, throughput=36, latency=80):
 def test_derive_rate_plan_brackets_measured_capacity():
     minimum, maximum, step = derive_rate_plan(36.8)
 
-    assert (minimum, maximum, step) == (18.5, 40.7, 3.7)
-    assert minimum >= 36.8 * 0.5
+    assert (minimum, maximum, step) == (14.7, 40.7, 3.7)
+    assert minimum <= 36.8 * 0.4
     assert maximum >= 36.8 * 1.1
+
+
+def test_rate_plan_includes_a_headroom_candidate_below_half_capacity():
+    minimum, _, step = derive_rate_plan(38.1)
+
+    assert minimum == 15.2
+    assert minimum + step <= 38.1 * 0.51
 
 
 def test_writes_one_command_summary(tmp_path):

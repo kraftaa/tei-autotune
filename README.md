@@ -210,6 +210,10 @@ validation against a real TEI 1.9.3 server. It also documents a negative result:
 larger batches and additional concurrency reduced performance on that Metal
 backend.
 
+For a reproducible Kubernetes run on NVIDIA A10G, L4, or L40S hardware, see the
+[NVIDIA benchmark guide](docs/NVIDIA_BENCHMARK.md). It includes hardware-specific
+TEI images, scheduling overlays, result retrieval, and cleanup instructions.
+
 ## Development
 
 ```bash
