@@ -235,11 +235,12 @@ class TeiClient:
             transport=self.transport,
         ) as client:
             if warmup_seconds > 0:
-                await self._run_once(
+                await self._run_open_loop_once(
                     client,
                     corpus,
                     batch_size=batch_size,
                     concurrency=concurrency,
+                    arrival_rate_texts_per_second=arrival_rate_texts_per_second,
                     duration_seconds=warmup_seconds,
                     repetition=-1,
                 )

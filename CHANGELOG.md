@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2 - 2026-11-08
+
+- Warm up fixed-arrival validation at the requested arrival rate instead of
+  briefly saturating the endpoint before every measured repetition.
+
 ## 0.5.1 - 2026-11-07
 
 - Start automatic safe-rate ramps at 40% of saturated capacity so a confirmed

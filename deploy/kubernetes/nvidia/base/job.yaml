@@ -32,7 +32,7 @@ spec:
                   raise SystemExit("TEI was not ready after 20 minutes")
               PY
               python -m pip install --no-cache-dir \
-              https://github.com/kraftaa/tei-autotune/releases/download/v0.5.1/tei_autotune-0.5.1-py3-none-any.whl
+              https://github.com/kraftaa/tei-autotune/releases/download/v0.5.2/tei_autotune-0.5.2-py3-none-any.whl
               tei-autotune run \
               --url http://tei \
               --corpus /corpus/documents.txt \

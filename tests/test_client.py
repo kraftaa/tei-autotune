@@ -1,10 +1,11 @@
 import asyncio
 import json
+from unittest.mock import AsyncMock
 
 import httpx
 
 from tei_autotune.client import TeiClient
-from tei_autotune.models import WorkloadItem
+from tei_autotune.models import RunResult, WorkloadItem
 
 
 def test_client_discovers_server_and_measures_cell():
@@ -59,3 +60,34 @@ def test_client_discovers_server_and_measures_cell():
     assert result.client_cpu_seconds > 0
     assert result.server_queue_p50_ms == 1.5
     assert result.server_inference_p50_ms == 5.5
+
+
+def test_fixed_rate_warmup_uses_the_requested_arrival_rate():
+    client = TeiClient("http://mock-tei", transport=httpx.MockTransport(lambda _: None))
+    warmup = RunResult(1, 2, -1, 2, 1, 0, 1, 0, [1])
+    measured = RunResult(1, 2, 0, 10, 1, 0, 1, 0, [1])
+    client._run_once = AsyncMock()
+    client._run_open_loop_once = AsyncMock(side_effect=[warmup, measured])
+
+    result = asyncio.run(
+        client.run_open_loop(
+            [WorkloadItem("one")],
+            batch_size=1,
+            concurrency=2,
+            arrival_rate_texts_per_second=19,
+            duration_seconds=10,
+            warmup_seconds=2,
+            repetition=0,
+        )
+    )
+
+    assert result is measured
+    client._run_once.assert_not_awaited()
+    assert client._run_open_loop_once.await_count == 2
+    warmup_call, measured_call = client._run_open_loop_once.await_args_list
+    assert warmup_call.kwargs["arrival_rate_texts_per_second"] == 19
+    assert warmup_call.kwargs["duration_seconds"] == 2
+    assert warmup_call.kwargs["repetition"] == -1
+    assert measured_call.kwargs["arrival_rate_texts_per_second"] == 19
+    assert measured_call.kwargs["duration_seconds"] == 10
+    assert measured_call.kwargs["repetition"] == 0
